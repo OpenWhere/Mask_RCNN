@@ -1253,8 +1253,10 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         mask = det.augment_image(mask.astype(np.uint8),
                                  hooks=imgaug.HooksImages(activator=hook))
         # Verify that shapes didn't change
-        assert image.shape == image_shape, "Augmentation shouldn't change image size"
-        assert mask.shape == mask_shape, "Augmentation shouldn't change mask size"
+        assert image.shape == image_shape, ("Augmentation shouldn't change image size ({} before, {} after)"
+                                            .format(image_shape, image.shape))
+        assert mask.shape == mask_shape, ("Augmentation shouldn't change mask size ({} before, {} after)"
+                                          .format(mask_shape, mask.shape))
         # Change mask back to bool
         mask = mask.astype(np.bool)
 
@@ -1459,6 +1461,9 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
     rpn_match = np.zeros([anchors.shape[0]], dtype=np.int32)
     # RPN bounding boxes: [max anchors per image, (dy, dx, log(dh), log(dw))]
     rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
+
+    if not any(gt_class_ids > 0):
+        return rpn_match, rpn_bbox  # empty, no positive examples
 
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
@@ -1708,12 +1713,6 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                                 augmentation=augmentation,
                                 use_mini_mask=config.USE_MINI_MASK)
 
-            # Skip images that have no instances. This can happen in cases
-            # where we train on a subset of classes and the image doesn't
-            # have any of the classes we care about.
-            if not np.any(gt_class_ids > 0):
-                continue
-
             # RPN Targets
             rpn_match, rpn_bbox = build_rpn_targets(image.shape, anchors,
                                                     gt_class_ids, gt_boxes, config)
@@ -1806,8 +1805,8 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             raise
         except:
             # Log it and skip the image
-            logging.exception("Error processing image {}".format(
-                dataset.image_info[image_id]))
+            logging.exception("Error processing image {}: {}".format(
+                image_id, dataset.image_info[image_id]['path']))
             error_count += 1
             if error_count > 5:
                 raise
