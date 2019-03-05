@@ -2274,7 +2274,8 @@ class MaskRCNN():
             "*epoch*", "{epoch:04d}")
 
     def train(self, train_dataset, val_dataset, learning_rate, epochs, layers,
-              augmentation=None, custom_callbacks=None, no_augmentation_sources=None):
+              augmentation=None, custom_callbacks=None, no_augmentation_sources=None,
+              checkpoint_epochs=1):
         """Train the model.
         train_dataset, val_dataset: Training and validation Dataset objects.
         learning_rate: The learning rate to train with
@@ -2306,6 +2307,8 @@ class MaskRCNN():
         no_augmentation_sources: Optional. List of sources to exclude for
             augmentation. A source is string that identifies a dataset and is
             defined in the Dataset class.
+        checkpoint_epochs: How often to save model checkpoints. Deafult is every epoch.
+            Set to None to disable model checkpointing.
         """
         assert self.mode == "training", "Create model in training mode."
 
@@ -2339,9 +2342,14 @@ class MaskRCNN():
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
-            keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True),
         ]
+
+        if checkpoint_epochs is not None:
+            callbacks.append(keras.callbacks.ModelCheckpoint(
+                self.checkpoint_path, period=checkpoint_epochs,
+                verbose=0, save_weights_only=True))
+        else:
+            log('WARNING: Model checkpoints are disabled.')
 
         # Add custom callbacks to the list
         if custom_callbacks:
@@ -2413,6 +2421,9 @@ class MaskRCNN():
         image_metas = np.stack(image_metas)
         windows = np.stack(windows)
         return molded_images, image_metas, windows
+
+    def save_weights(self, path):
+        self.keras_model.save_weights(path)
 
     def unmold_detections(self, detections, mrcnn_mask, original_image_shape,
                           image_shape, window):
